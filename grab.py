@@ -46,9 +46,12 @@ def main():
     if state != {'status': 'idle'}:
         print('Safety lock is not idle; no launch will be submitted.')
         return 1
+    settings = json.loads(os.environ.get('OCI_SETTINGS', '{}'))
+    def setting(name):
+        return settings[name] if name in settings else os.environ[name]
     config = {
-        'tenancy': os.environ['OCI_TENANCY'], 'user': os.environ['OCI_USER'],
-        'fingerprint': os.environ['OCI_FINGERPRINT'], 'key_content': os.environ['OCI_API_KEY'],
+        'tenancy': setting('OCI_TENANCY'), 'user': setting('OCI_USER'),
+        'fingerprint': setting('OCI_FINGERPRINT'), 'key_content': os.environ['OCI_API_KEY'],
         'region': REGION,
     }
     tenancy = config['tenancy']
@@ -76,7 +79,7 @@ def main():
     total = sum(x.size_in_gbs for x in boots + volumes if x.lifecycle_state != 'TERMINATED')
     if total + 50 > 200:
         raise RuntimeError('Storage allowance would be exceeded')
-    subnet = network.get_subnet(os.environ['OCI_SUBNET']).data
+    subnet = network.get_subnet(setting('OCI_SUBNET')).data
     if subnet.lifecycle_state != 'AVAILABLE' or subnet.prohibit_public_ip_on_vnic:
         raise RuntimeError('Subnet is unavailable or disallows public IPs')
     images = all_results(compute.list_images, tenancy, shape=SHAPE,
@@ -98,7 +101,7 @@ def main():
         shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(ocpus=2, memory_in_gbs=12),
         source_details=oci.core.models.InstanceSourceViaImageDetails(image_id=images[0].id),
         create_vnic_details=oci.core.models.CreateVnicDetails(subnet_id=subnet.id, assign_public_ip=True),
-        metadata={'ssh_authorized_keys': os.environ['SSH_PUBLIC_KEY']},
+        metadata={'ssh_authorized_keys': setting('SSH_PUBLIC_KEY')},
     )
     try:
         compute.launch_instance(details, opc_retry_token=token, retry_strategy=oci.retry.NoneRetryStrategy())
