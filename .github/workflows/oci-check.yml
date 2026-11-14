@@ -1,6 +1,9 @@
 name: OCI read-only validation
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/oci-check.yml'
 permissions:
   contents: read
 concurrency:
