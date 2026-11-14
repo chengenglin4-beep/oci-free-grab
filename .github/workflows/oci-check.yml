@@ -19,11 +19,8 @@ jobs:
       - name: Check configuration without creating anything
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
-          OCI_USER: ${{ secrets.OCI_USER }}
-          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_SETTINGS: ${{ secrets.OCI_SETTINGS }}
           OCI_API_KEY: ${{ secrets.OCI_API_KEY }}
-          OCI_SUBNET: ${{ secrets.OCI_SUBNET }}
           DRY_RUN: '1'
         run: python grab.py
 
