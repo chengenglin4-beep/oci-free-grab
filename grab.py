@@ -43,6 +43,9 @@ def all_results(call, *args, **kwargs):
 
 def main():
     state, sha = get_state()
+    if state.get('status') == 'created':
+        print('Instance was already created. No further launch.')
+        return 0
     if state != {'status': 'idle'}:
         print('Safety lock is not idle; no launch will be submitted.')
         return 1
@@ -59,7 +62,14 @@ def main():
     compute = oci.core.ComputeClient(config, timeout=(10, 30))
     block = oci.core.BlockstorageClient(config, timeout=(10, 30))
     network = oci.core.VirtualNetworkClient(config, timeout=(10, 30))
-    ads = all_results(identity.list_availability_domains, tenancy)
+    try:
+        ads = all_results(identity.list_availability_domains, tenancy)
+    except oci.exceptions.ServiceError as error:
+        if error.status == 401 and os.environ.get('DRY_RUN', '1') == '0':
+            put_state({'status': 'authentication_failed'}, sha)
+            print('Authentication failed (401). Automatic launches stopped.')
+            return 1
+        raise
     matches = [x.name for x in ads if x.name.endswith(AD_SUFFIX)]
     if len(matches) != 1:
         raise RuntimeError('Cannot uniquely identify AD-1')
