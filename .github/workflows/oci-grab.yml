@@ -1,11 +1,8 @@
 name: OCI free instance retry
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/oci-grab.yml'
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '*/5 * * * *'
 permissions:
   contents: write
 concurrency:
@@ -14,14 +11,14 @@ concurrency:
 jobs:
   grab:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
       - name: Install OCI SDK
         run: python -m pip install 'oci==2.189.0'
-      - name: Try one free A1 instance
+      - name: Retry free A1 instance
         env:
           GITHUB_TOKEN: ${{ github.token }}
           OCI_SETTINGS: ${{ secrets.OCI_SETTINGS }}
