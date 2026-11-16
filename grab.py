@@ -3,6 +3,8 @@ import base64
 import json
 import os
 import sys
+import time
+import random
 import urllib.error
 import urllib.request
 import uuid
@@ -43,6 +45,12 @@ def all_results(call, *args, **kwargs):
 
 def main():
     state, sha = get_state()
+    if state.get('status') == 'cooldown':
+        if time.time() < state.get('until', float('inf')):
+            print('429 cooldown in effect; waiting for the next schedule.', flush=True)
+            return 0
+        put_state({'status': 'idle'}, sha)
+        state, sha = get_state()
     if state.get('status') == 'created':
         print('Instance was already created. No further launch.')
         return 0
@@ -117,10 +125,18 @@ def main():
         compute.launch_instance(details, opc_retry_token=token, retry_strategy=oci.retry.NoneRetryStrategy())
     except oci.exceptions.ServiceError as error:
         msg = str(error.message or '').lower()
-        if 'out of host capacity' in msg or error.status == 429:
-            put_state({'status': 'idle'}, pending_sha)
-            print('Capacity unavailable or request throttled. Will wait for next schedule.')
+        if error.status == 401:
+            put_state({'status': 'authentication_failed'}, pending_sha)
+            print('401 authentication failed. Automatic launches stopped.', flush=True)
+            return 1
+        if error.status == 429:
+            put_state({'status': 'cooldown', 'until': time.time() + 300}, pending_sha)
+            print('429 rate limited. Backing off for at least 300 seconds.', flush=True)
             return 0
+        if 'out of host capacity' in msg:
+            put_state({'status': 'idle'}, pending_sha)
+            print('Out of host capacity.', flush=True)
+            return 10
         print('OCI rejected the launch or its outcome is uncertain. Safety lock remains pending.')
         return 1
     put_state({'status': 'created'}, pending_sha)
@@ -128,9 +144,37 @@ def main():
     return 0
 
 
+def run_loop():
+    deadline = time.monotonic() + 300
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        print(f'Attempt {attempt} started at {time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}', flush=True)
+        try:
+            result = main()
+        except oci.exceptions.ServiceError as error:
+            if error.status in (401, 429):
+                state, sha = get_state()
+                if state == {'status': 'idle'}:
+                    replacement = {'status': 'authentication_failed'} if error.status == 401 else {'status': 'cooldown', 'until': time.time() + 300}
+                    put_state(replacement, sha)
+                print('401 authentication failed.' if error.status == 401 else '429 rate limited. Backing off for at least 300 seconds.', flush=True)
+                return 1 if error.status == 401 else 0
+            raise
+        if result != 10:
+            return result
+        delay = 120 + random.randint(10, 30)
+        if time.monotonic() + delay >= deadline:
+            print('Run time limit reached; next schedule will retry.', flush=True)
+            return 0
+        print(f'Waiting {delay} seconds before next capacity retry.', flush=True)
+        time.sleep(delay)
+    return 0
+
+
 if __name__ == '__main__':
     try:
-        sys.exit(main())
+        sys.exit(run_loop())
     except Exception as exc:
         # Exception text may contain account identifiers or credential paths.
         print('Safety stop:', type(exc).__name__)
