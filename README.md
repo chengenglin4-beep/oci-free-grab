@@ -9,7 +9,8 @@
 ## 查看是否抢到
 
 打开最新运行的 Retry free A1 instance 日志：
-- Out of host capacity：容量不足，等待后重试。\n- 429 rate limited：触发限流，暂停至少 300 秒。
+- Out of host capacity：容量不足，等待后重试。
+- 429 rate limited：触发限流，暂停至少 300 秒。
 - Launch accepted：创建请求已接受，请到 OCI 实例页面查看状态和公网 IP。
 - Instance was already created：已提交成功，不再创建。
 - Safety stop / Safety lock is not idle：异常停止，需核对后处理。
