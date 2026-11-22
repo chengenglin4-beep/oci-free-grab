@@ -25,5 +25,5 @@ jobs:
           OCI_SETTINGS: ${{ secrets.OCI_SETTINGS }}
           OCI_API_KEY: ${{ secrets.OCI_API_KEY }}
           DRY_RUN: '1'
-        run: python grab.py
+        run: python inspect_oci.py
 
