@@ -36,7 +36,8 @@ def get_state():
 
 def put_state(state, sha):
     body = base64.b64encode(json.dumps(state, sort_keys=True).encode()).decode()
-    gh_request('PUT', {'message': 'Update launch safety state', 'content': body, 'sha': sha})
+    result = gh_request('PUT', {'message': 'Update launch safety state', 'content': body, 'sha': sha})
+    return result['content']['sha']
 
 
 def all_results(call, *args, **kwargs):
@@ -54,8 +55,11 @@ def main():
     if state.get('status') == 'created':
         print('Instance was already created. No further launch.')
         return 0
+    if state.get('status') in ('pending', 'authentication_failed'):
+        print('Launch paused: safety state is ' + state['status'] + '; investigate before resuming.', flush=True)
+        return 0
     if state != {'status': 'idle'}:
-        print('Safety lock is not idle; no launch will be submitted.')
+        print('Unknown safety state; no launch will be submitted.', flush=True)
         return 1
     settings = json.loads(os.environ.get('OCI_SETTINGS', '{}'))
     def setting(name):
@@ -110,10 +114,7 @@ def main():
         print('Dry run: AD-1; A1 Flex; 2 OCPU; 12 GB; default boot volume; public IPv4.')
         return 0
     token = str(uuid.uuid4())
-    put_state({'status': 'pending', 'token': token}, sha)
-    pending, pending_sha = get_state()
-    if pending != {'status': 'pending', 'token': token}:
-        raise RuntimeError('Safety lock could not be verified')
+    pending_sha = put_state({'status': 'pending', 'token': token}, sha)
     details = oci.core.models.LaunchInstanceDetails(
         availability_domain=ad, compartment_id=tenancy, display_name='sg-node-01', shape=SHAPE,
         shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(ocpus=2, memory_in_gbs=12),
